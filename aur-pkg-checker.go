@@ -49,7 +49,7 @@ func get_installed_pkg_list() map[string]string {
 }
 
 func download_pkg_info(pkgname string) map[string]string {
-  aur_base_url := "https://aur.archlinux.org/cgit/aur.git/plain/PKGBUILD?h="
+  aur_base_url := "https://aur.archlinux.org/packages/"
   webversion := make(map[string]string)
   response, err := http.Get(aur_base_url + pkgname)
   if err != nil {
@@ -62,16 +62,15 @@ func download_pkg_info(pkgname string) map[string]string {
   if err != nil {
     fmt.Println(os.Stderr, "parsing response body:", err)
   }
-  // use regex to find line "pkgver=<version>"
+  // use regex to manually parse html
   // this is a bit hacky at the moment
-  r1, _ := regexp.Compile("pkgver=(.*)")
-  match1 := r1.Find(html_body)
-  results1 := strings.Split(string(match1), "=")
-  r2, _ := regexp.Compile("pkgrel=(.*)")
-  match2 := r2.Find(html_body)
-  results2 := strings.Split(string(match2), "=")
-  if len(results1) == 2 && len(results2) == 2 {
-    version := results1[1] + "-" + results2[1]
+  r, _ := regexp.Compile("<h2>Package Details: (.*)</h2>")
+  match := r.Find(html_body)
+  versionline := strings.Split(string(match), " ")
+  if len(versionline) == 4 {
+    //fmt.Println("versionline: " + versionline[3])
+    versionstring := strings.Split(versionline[3], "<")
+    version := versionstring[0]
     webversion[pkgname] = version
   } else {
     version := "NOT_FOUND"
@@ -94,9 +93,17 @@ func get_latest_pkg_versions(installed_map map[string]string) map[string]string 
 
 func compare_versions(localver map[string]string, webver map[string]string)  {
   for k,_ := range localver {
-    fmt.Println("vercmp", localver[k] + " " + webver[k])
-    cmp := execute_system_command("vercmp", localver[k], webver[k])
-    fmt.Println("compare_versions: " + localver[k] + " , " + webver[k] + " = " + cmp)
+    //fmt.Println("vercmp", localver[k] + " " + webver[k])
+    switch cmp := execute_system_command("vercmp", localver[k], webver[k]); cmp {
+    case "-1\n":
+        fmt.Println(k + " has new version available (" + webver[k]+ ")")
+    case "0\n":
+        fmt.Println(k + " version OK")
+    case "1\n":
+        fmt.Println(k + " maybe OK (" + localver[k] + ")")
+    default:
+        fmt.Println("Should not reach here! Error, error!")
+    }
   }
 }
 
